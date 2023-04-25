@@ -1,6 +1,9 @@
 #Author: Kurian Benoy
 FROM python:3.9-slim-buster
 
+# set label for image
+LABEL service="formsflow.ai"
+
 WORKDIR /forms-flow-api/app
 
 # install curl, gnupg2 and unzip

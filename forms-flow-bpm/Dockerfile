@@ -2,6 +2,10 @@
 
 # Maven build
 FROM maven:3.8.1-openjdk-17-slim AS MAVEN_TOOL_CHAIN
+
+# set label for image
+LABEL service="formsflow.ai"
+
 COPY pom*.xml /tmp/
 COPY settings-docker.xml /usr/share/maven/ref/
 WORKDIR /tmp/

@@ -1,6 +1,9 @@
 # base image
 FROM node:14.17.0-alpine as build-stage
 
+# set label for image
+LABEL service="formsflow.ai"
+
 # set working directory
 WORKDIR /forms-flow-web/app
 
