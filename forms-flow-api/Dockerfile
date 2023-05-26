@@ -2,7 +2,7 @@
 FROM python:3.9-slim-buster
 
 # set label for image
-LABEL service="formsflow.ai"
+LABEL Name="formsflow"
 
 WORKDIR /forms-flow-api/app
 

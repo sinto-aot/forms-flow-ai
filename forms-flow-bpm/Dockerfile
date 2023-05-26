@@ -3,9 +3,6 @@
 # Maven build
 FROM maven:3.8.1-openjdk-17-slim AS MAVEN_TOOL_CHAIN
 
-# set label for image
-LABEL service="formsflow.ai"
-
 COPY pom*.xml /tmp/
 COPY settings-docker.xml /usr/share/maven/ref/
 WORKDIR /tmp/
@@ -16,6 +13,9 @@ RUN mvn -s /usr/share/maven/ref/settings-docker.xml package -P default
 
 # Final custom slim java image (for apk command see 17-jdk-alpine-slim)
 FROM openjdk:17-jdk-alpine
+
+# set label for image
+LABEL Name="formsflow"
 
 ENV JAVA_VERSION=17-ea+14
 ENV JAVA_HOME=/opt/java/openjdk-17\
