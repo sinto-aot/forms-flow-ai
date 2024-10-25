@@ -9,6 +9,7 @@ import {
   fetchTaskVariables,
 } from "../../../../apiManager/services/processServices";
 import { listProcess } from "../../../../apiManager/services/formatterService";
+import userRoles from "../../../../constants/permissions";
 
 import {
   deleteFilters,
@@ -47,12 +48,12 @@ import {
 import { trimFirstSlash } from "../../constants/taskConstants";
 import { cloneDeep, omitBy } from "lodash";
 import {
-  FORMSFLOW_ADMIN,
   MULTITENANCY_ENABLED,
 } from "../../../../constants/constants";
 import { fetchAllForms } from "../../../../apiManager/services/bpmFormServices";
 import { fetchUserList } from "../../../../apiManager/services/bpmTaskServices";
 import { filterSelectOptionByLabel } from "../../../../helper/helper";
+import { removeTenantKey } from "../../../../helper/helper";
 
 const initialValueOfTaskAttribute = {
   applicationId: true,
@@ -73,10 +74,10 @@ export default function CreateNewFilterDrawer({
 }) {
   const dispatch = useDispatch();
   const [filterName, setFilterName] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [showUndefinedVariable, setShowUndefinedVariable] = useState(false);
   const [definitionKeyId, setDefinitionKeyId] = useState("");
   const [candidateGroup, setCandidateGroup] = useState([]);
-  const userRoles = useSelector((state) => state.user.roles || []);
   const [assignee, setAssignee] = useState("");
   const [filterDisplayOrder, setFIlterDisplayOrder] = useState(null);
 
@@ -95,12 +96,12 @@ export default function CreateNewFilterDrawer({
   const tenantKey = useSelector((state) => state.tenants?.tenantId);
   const process = useSelector((state) => state.process?.processList);
   const processList = useMemo(() => listProcess(process, true), [process]);
-
+  const { createFilters, admin, manageAllFilters } = userRoles();
   const userGroups = useSelector(
     (state) => state.userAuthorization?.userGroups
   );
-  const userName = useSelector(
-    (state) => state.user?.userDetail?.preferred_username
+  const userDetails = useSelector(
+    (state) => state.user?.userDetail
   );
   const sortParams = useSelector(
     (state) => state.bpmTasks.filterListSortParams
@@ -109,13 +110,13 @@ export default function CreateNewFilterDrawer({
     (state) => state.bpmTasks.filterListSearchParams
   );
   const selectedFilter = useSelector((state) => state.bpmTasks.selectedFilter);
-  const filterList = useSelector((state) => state.bpmTasks.filterList);
 
   const [variables, setVariables] = useState([]);
   const [forms, setForms] = useState({ data: [], isLoading: true });
   const [selectedForm, setSelectedForm] = useState(null);
   const [taskVariablesKeys, setTaskVariablesKeys] = useState({});
   const [processLoading, setProcessLoading] = useState(false);
+  //const loginedUserRoles = useSelector((state) => state.user.roles || []);
 
   const [overlayGroupShow, setOverlayGroupShow] = useState(false);
   const [overlayUserShow, setOverlayUserShow] = useState(false);
@@ -161,7 +162,7 @@ export default function CreateNewFilterDrawer({
     setProcessLoading(true);
     fetchTaskVariables(formId)
       .then((res) => {
-        setTaskVariableFromMapperTable(res.data?.taskVariable || []);
+        setTaskVariableFromMapperTable(res.data?.taskVariables || []);
         setProcessLoading(false);
       })
       .catch((err) => {
@@ -184,6 +185,7 @@ export default function CreateNewFilterDrawer({
   useEffect(() => {
     if (selectedFilterData) {
       setFilterName(selectedFilterData.name);
+      setCreatedBy(selectedFilterData.createdBy);
       setFIlterDisplayOrder(selectedFilterData.order);
       let processDefinitionName =
         selectedFilterData?.criteria?.processDefinitionKey;
@@ -237,7 +239,7 @@ export default function CreateNewFilterDrawer({
       }
 
       // if the user has this role then we will check the condition else it will always true
-      if (userRoles.includes(FORMSFLOW_ADMIN)) {
+      if (admin) {
         setIsTasksForCurrentUserGroupsEnabled(
           selectedFilterData?.criteria?.candidateGroupsExpression ? true : false
         );
@@ -323,14 +325,9 @@ export default function CreateNewFilterDrawer({
             })
             .finally(() => {
               if (selectedFilterData) {
-                const filterSelected = filterList?.find(
-                  (filter) => filter.id === selectedFilterData?.id
-                );
                 if (selectedFilterData?.id === selectedFilter?.id) {
                   dispatch(setSelectedBPMFilter(resData));
                   fetchTasks(resData);
-                } else {
-                  dispatch(setSelectedBPMFilter(filterSelected));
                 }
                 toast.success(t("Changes Applied Successfully"));
               } else {
@@ -373,7 +370,7 @@ export default function CreateNewFilterDrawer({
       roles = [];
     }
     if (permissions === PRIVATE_ONLY_YOU) {
-      users.push(userName);
+      users.push(userDetails.preferred_username);
     }
     if (
       selectUserGroupIcon === "user" &&
@@ -402,7 +399,7 @@ export default function CreateNewFilterDrawer({
         processDefinitionKey: definitionKeyId,
         candidateGroup:
           MULTITENANCY_ENABLED && candidateGroup
-            ? tenantKey + "-" + candidateGroup
+            ? tenantKey + "-" + trimFirstSlash(candidateGroup)
             : candidateGroup,
         assignee: assignee,
         includeAssignedTasks:
@@ -424,6 +421,7 @@ export default function CreateNewFilterDrawer({
       isTasksForCurrentUserGroupsEnabled: isTasksForCurrentUserGroupsEnabled,
       isMyTasksEnabled: isMyTasksEnabled,
     };
+   
     /**
      * If a form is selected, set the formId property in the data object
      * to the id of the selected form.
@@ -547,19 +545,19 @@ export default function CreateNewFilterDrawer({
       label: `${user.username}`,
     }));
   }, [userList]);
-
+  
   const candidateOptions = useMemo(() => {
     return MULTITENANCY_ENABLED
-      ? userRoles.map((role) => ({
-          value: role,
-          label: role,
+      ? candidateGroups.map((group) => ({
+          value: removeTenantKey(group, tenantKey),
+          label: removeTenantKey(group, tenantKey),
         }))
       : candidateGroups.map((group) => ({
           value: trimFirstSlash(group),
           label: group,
         }));
-  }, [candidateGroups, userRoles, MULTITENANCY_ENABLED]);
-
+  }, [candidateGroups, MULTITENANCY_ENABLED]);
+  
   const handleAssignee = (selectedOption) => {
     setAssignee(selectedOption ? selectedOption.value : null);
   };
@@ -716,7 +714,7 @@ export default function CreateNewFilterDrawer({
           </h5>
         </div>
 
-        {userRoles.includes(FORMSFLOW_ADMIN) && (
+        {admin && (
           <>
             <div className="d-flex align-items-center mt-1">
               <input
@@ -910,7 +908,7 @@ export default function CreateNewFilterDrawer({
           </label>{" "}
           <br />
           {permissions === SPECIFIC_USER_OR_GROUP &&
-          specificUserGroup === SPECIFIC_USER_OR_GROUP ? (
+            specificUserGroup === SPECIFIC_USER_OR_GROUP ? (
             <div className="d-flex">
               <OverlayTrigger
                 placement="right"
@@ -951,7 +949,7 @@ export default function CreateNewFilterDrawer({
                     <i
                       className={`fa fa-users ${
                         selectUserGroupIcon === "group" ? "highlight" : ""
-                      } cursor-pointer group-icon`}
+                        } cursor-pointer group-icon`}
                     />
                   </div>
                 </div>
@@ -978,7 +976,13 @@ export default function CreateNewFilterDrawer({
             </div>
           ) : null}
         </div>
-
+        {createdBy && <>
+          <h5 className="fw-bold ">
+            <Translation>{(t) => t("Filter Created by")}</Translation>
+          </h5>
+          <i className="fa-solid fa-user me-2"></i>
+          {createdBy}
+        </>}
         <Divider />
       </List>
 
@@ -1037,15 +1041,17 @@ export default function CreateNewFilterDrawer({
   return (
     <div>
       <React.Fragment key="left">
-        <button
-          onClick={() => {
-            toggleDrawer();
-            clearAllFilters();
-          }}
-          className="btn  btn-outline-primary"
-        >
-          <Translation>{(t) => t("Create New Filter")}</Translation>
-        </button>
+        {(createFilters || manageAllFilters) && (
+      <button
+        onClick={() => {
+          toggleDrawer();
+          clearAllFilters();
+        }}
+        className="btn btn-outline-primary"
+      >
+        <Translation>{(t) => t("Create New Filter")}</Translation>
+      </button>
+    )}
         {modalShow && (
           <div>
             <TaskAttributeComponent

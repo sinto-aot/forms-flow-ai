@@ -14,20 +14,22 @@ import { setFormSearchLoading } from "../../actions/checkListActions";
 export const fetchBPMFormList = (
   pageNo,
   limit,
-  sortBy,
-  sortOrder,
+  formSort,
   formName,
   formType,
   ...rest
 ) => {
   const done = rest.length ? rest[0] : () => { };
   return (dispatch) => {
-    let url = `${API.FORM}?pageNo=${pageNo}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
+    let sortOrder = formSort.sortOrder ; 
+    let sortBy = formSort.sortBy; 
+    let url = `${API.FORM}?pageNo=${pageNo}&limit=${limit}&sortBy=${sortBy
+    }&sortOrder=${sortOrder}`;
     if (formType) {
       url += `&formType=${formType}`;
     }
     if (formName) {
-      url += `&formName=${encodeURIComponent(formName)}`;
+      url += `&search=${encodeURIComponent(formName)}`;
     }
     RequestService.httpGETRequest(url, {}, StorageService.get(StorageService.User.AUTH_TOKEN))
       .then((res) => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import utils from "formiojs/utils";
+import utils from "@aot-technologies/formiojs/lib/utils";
 import { Button, Card } from "react-bootstrap";
 import Select from "react-select";
 import _ from "lodash";
@@ -16,7 +16,7 @@ import { listProcess } from "../../../apiManager/services/formatterService";
 import { DEFAULT_WORKFLOW } from "../../../constants/taskConstants";
 import { filterSelectOptionByLabel } from "../../../helper/helper";
 import { fetchAllBpmProcesses } from "../../../apiManager/services/processServices";
-
+import  userRoles  from "../../../constants/permissions";
 const WorkFlow = React.memo(
   ({
     handleNext,
@@ -39,6 +39,8 @@ const WorkFlow = React.memo(
     );
 
     const workflow = useSelector((state) => state.process.workflowAssociated);
+    const { createDesigns } = userRoles();
+
 
     // handle add new task variable
     const [formFields, setFormFields] = useState({});
@@ -106,7 +108,7 @@ const WorkFlow = React.memo(
           ...formProcessList,
           processKey: workflow.value,
           processName: workflow.label,
-          taskVariable: selectedVariables,
+          taskVariables: selectedVariables,
         })
       );
     };
@@ -172,6 +174,7 @@ const WorkFlow = React.memo(
       <>
         <div className="mt-3">
           <div className="d-flex align-items-center justify-content-between">
+            {createDesigns && 
             <Button
               data-testid="form-workflow-edit-button"
               variant="primary"
@@ -179,6 +182,7 @@ const WorkFlow = React.memo(
             >
               {t("Edit")}
             </Button>
+            }
             <div>
               <SaveNext
                 handleBack={handleBack}

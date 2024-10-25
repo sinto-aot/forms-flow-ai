@@ -3,7 +3,6 @@ import {
   setShowApplications,
   setUserRolesToObject,
 } from "../helper/user";
-import { LANGUAGE } from "../constants/constants";
 import { setFormAndSubmissionAccess } from "../helper/access";
 
 const getLanguages = localStorage.getItem("languages");
@@ -24,11 +23,11 @@ const initialState = {
   submissionAccess: roleIdsFromLocalStorage
     ? setFormAndSubmissionAccess("submissionAccess", roleIdsFromLocalStorage)
     : [],
-  userDetail: null,
+  userDetail: {},
   isAuthenticated: false,
   currentPage: "",
   showApplications: false,
-  lang: localStorage.getItem("lang") ? localStorage.getItem("lang") : LANGUAGE,
+  lang: localStorage.getItem("lang") ? localStorage.getItem("lang") : null,
   selectLanguages: getLanguages ? JSON.parse(getLanguages) : [],
   defaultFilter: "",
 };

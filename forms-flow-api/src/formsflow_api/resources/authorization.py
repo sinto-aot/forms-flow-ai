@@ -6,14 +6,17 @@ from flask import request
 from flask_restx import Namespace, Resource, fields
 from formsflow_api_utils.exceptions import BusinessException
 from formsflow_api_utils.utils import (
-    DESIGNER_GROUP,
+    CREATE_DESIGNS,
+    CREATE_SUBMISSIONS,
+    VIEW_DASHBOARDS,
+    VIEW_DESIGNS,
+    VIEW_SUBMISSIONS,
     auth,
     cors_preflight,
     profiletime,
 )
 
 from formsflow_api.constants import BusinessErrorCode
-from formsflow_api.models import AuthType
 from formsflow_api.services import AuthorizationService
 
 API = Namespace("authorization", description="Authorization APIs")
@@ -107,7 +110,7 @@ class AuthorizationList(Resource):
             auth_service.create_authorization(
                 auth_type.upper(),
                 request.get_json(),
-                bool(auth.has_role([DESIGNER_GROUP])),
+                bool(auth.has_role([CREATE_DESIGNS])),
             ),
             HTTPStatus.OK,
         )
@@ -121,7 +124,7 @@ class UserAuthorizationList(Resource):
 
     @staticmethod
     @API.doc("list_authorization")
-    @auth.require
+    @auth.has_one_of_roles([VIEW_DASHBOARDS])
     @profiletime
     @API.doc(
         responses={
@@ -152,7 +155,9 @@ class AuthorizationDetail(Resource):
 
     @staticmethod
     @API.doc("Authorization detail by Id")
-    @auth.require
+    @auth.has_one_of_roles(
+        [CREATE_DESIGNS, VIEW_DESIGNS, CREATE_SUBMISSIONS, VIEW_SUBMISSIONS]
+    )
     @profiletime
     @API.doc(
         responses={
@@ -168,7 +173,9 @@ class AuthorizationDetail(Resource):
         Fetch Authorization details by resource id based on authorization type.
         """
         response = auth_service.get_resource_by_id(
-            auth_type.upper(), resource_id, bool(auth.has_role([DESIGNER_GROUP]))
+            auth_type.upper(),
+            resource_id,
+            bool(auth.has_role([CREATE_DESIGNS])),
         )
         if response:
             return (
@@ -190,7 +197,7 @@ class AuthorizationListById(Resource):
 
     @staticmethod
     @API.doc("Authorization list by Id")
-    @auth.has_one_of_roles([DESIGNER_GROUP])
+    @auth.has_one_of_roles([CREATE_DESIGNS, VIEW_DESIGNS])
     @profiletime
     @API.doc(
         responses={
@@ -212,7 +219,7 @@ class AuthorizationListById(Resource):
 
     @staticmethod
     @API.doc("Authorization create by Id")
-    @auth.has_one_of_roles([DESIGNER_GROUP])
+    @auth.has_one_of_roles([CREATE_DESIGNS])
     @profiletime
     @API.doc(
         responses={
@@ -224,16 +231,9 @@ class AuthorizationListById(Resource):
     def post(resource_id: str):
         """Create or Update Authoization of Form by id."""
         data = request.get_json()
-        for auth_type in AuthType:
-            if (
-                data.get(auth_type.value.lower())
-                and auth_type.value != AuthType.DASHBOARD.value
-            ):
-                auth_service.create_authorization(
-                    auth_type.value.upper(),
-                    data.get(auth_type.value.lower()),
-                    bool(auth.has_role([DESIGNER_GROUP])),
-                )
+        AuthorizationService.create_or_update_resource_authorization(
+            data, bool(auth.has_role([CREATE_DESIGNS]))
+        )
         response = auth_service.get_auth_list_by_id(resource_id)
         if response:
             return (

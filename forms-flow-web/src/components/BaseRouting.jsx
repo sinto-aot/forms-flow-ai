@@ -59,9 +59,20 @@ const BaseRouting = React.memo(
       return <LandingPage />;
     }
     return (
-      <div className="container  mt-5">
+      <div className="container  mt-4">
         <div className="min-container-height ps-md-3">
-          <ToastContainer />
+          <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover={false}
+          theme="colored"
+           />
           <Switch>
             <Route path="/public">
               <PublicRoute
