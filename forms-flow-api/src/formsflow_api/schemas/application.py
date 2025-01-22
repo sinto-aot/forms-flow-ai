@@ -2,6 +2,8 @@
 
 from marshmallow import EXCLUDE, Schema, fields
 
+from .base_schema import AuditDateTimeSchema
+
 
 class ApplicationListReqSchema(Schema):
     """This is a general class for paginated request schema."""
@@ -36,9 +38,13 @@ class ApplicationListRequestSchema(ApplicationListReqSchema):
         data_key="modifiedTo", format="%Y-%m-%dT%H:%M:%S+00:00"
     )
     sort_order = fields.Str(data_key="sortOrder", required=False)
+    created_user_submissions = fields.Bool(data_key="createdUserSubmissions")
+    parent_form_id = fields.Str(data_key="parentFormId")
+    include_drafts = fields.Bool(data_key="includeDrafts")
+    only_drafts = fields.Bool(data_key="onlyDrafts")
 
 
-class ApplicationSchema(Schema):
+class ApplicationSchema(AuditDateTimeSchema):
     """This class manages application request and response schema."""
 
     class Meta:  # pylint: disable=too-few-public-methods
@@ -55,9 +61,7 @@ class ApplicationSchema(Schema):
     process_name = fields.Str(data_key="processName")
     process_tenant = fields.Str(data_key="processTenant")
     created_by = fields.Str(data_key="createdBy")
-    created = fields.Str()
     modified_by = fields.Str(data_key="modifiedBy")
-    modified = fields.Str()
     form_id = fields.Str(data_key="formId", load_only=True)
     latest_form_id = fields.Str(data_key="formId", dump_only=True)
     submission_id = fields.Str(data_key="submissionId")
@@ -66,6 +70,7 @@ class ApplicationSchema(Schema):
     is_resubmit = fields.Bool(data_key="isResubmit", dump_only=True)
     event_name = fields.Str(data_key="eventName", dump_only=True)
     data = fields.Dict(data_key="data", load_only=True)
+    is_draft = fields.Bool(data_key="isDraft", dump_only=True)
 
 
 class ApplicationUpdateSchema(Schema):

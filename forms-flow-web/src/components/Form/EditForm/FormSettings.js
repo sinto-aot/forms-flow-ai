@@ -3,7 +3,7 @@ import React, {
   useState,
   useImperativeHandle,
   forwardRef,
-  useCallback
+  useRef
 } from "react";
 import { Form, FormControl, InputGroup } from "react-bootstrap";
 import {
@@ -12,16 +12,19 @@ import {
   CustomRadioButton,
   FormInput,
   FormTextArea,
+  MultipleSelect
 } from "@formsflow/components";
 
-import MultiSelectComponent from "../../CustomComponents/MultiSelect";
+import { MULTITENANCY_ENABLED } from "../../../constants/constants";
+import {  addTenantkeyAsSuffix, convertSelectedValueToMultiSelectOption } from "../../../helper/helper";
 import { useDispatch, useSelector } from "react-redux";
 import { getUserRoles } from "../../../apiManager/services/authorizationService";
 import { useTranslation } from "react-i18next";
 import { copyText } from "../../../apiManager/services/formatterService";
 import _camelCase from "lodash/camelCase";
-import _cloneDeep from "lodash/cloneDeep";
 import { validateFormName, validatePathName } from "../../../apiManager/services/FormServices";
+import { HelperServices } from "@formsflow/service";
+import PropTypes from 'prop-types';
 
 //CONST VARIABLES
 const DESIGN = "DESIGN";
@@ -35,73 +38,108 @@ const FormSettings = forwardRef((props, ref) => {
   /* ---------------------------- redux store data ---------------------------- */
   const processListData = useSelector((state) => state.process.formProcessList);
   const { path, display } = useSelector((state) => state.form.form);
-  const { formAccess = [], submissionAccess = [] } = useSelector(
-    (state) => state.user
-  );
-  const roleIds = useSelector((state) => state.user?.roleIds || {});
+ 
   const { authorizationDetails: formAuthorization } = useSelector(
     (state) => state.process
   );
-
+  const {parentFormId,formId} = useSelector((state) => state.process.formProcessList);
   /* --------------------------- useState Variables --------------------------- */
   const [userRoles, setUserRoles] = useState([]);
-  const [copied, setCopied] = useState(false); 
+  const [copied, setCopied] = useState(false);
+  // to check if already vlidated and passed.
+  const blurStatus = useRef({ title: false, path: false });
   const [formDetails, setFormDetails] = useState({
     title: processListData.formName,
     path: path,
     description: processListData.description,
     display: display,
   });
+  const [isValidating, setIsValidating] = useState({
+    name: false,
+    path: false,
+  });
   const [isAnonymous, setIsAnonymous] = useState(processListData.anonymous || false);
   const [errors, setErrors] = useState({
     name: "",
     path: "",
   });
-  const [formAccessCopy, setFormAccessCopy] = useState(_cloneDeep(formAccess));
-  const [submissionAccessCopy, setSubmissionAccessCopy] = useState(
-    _cloneDeep(submissionAccess)
-  );
+  const tenantKey = useSelector((state) => state.tenants?.tenantId);
 
   const publicUrlPath = `${window.location.origin}/public/form/`;
-  const setSelectedOption = (roles, option)=> roles.length ? "specifiedRoles" : option;
+  const [urlPath,setUrlPath] = useState(publicUrlPath);
+  const setSelectedOption = (option, roles = [])=> roles.length ? "specifiedRoles" : option;
+  const multiSelectOptionKey = "role";
   /* ------------------------- authorization variables ------------------------ */
   const [rolesState, setRolesState] = useState({
     DESIGN: {
-      selectedRoles: formAuthorization.DESIGNER?.roles,
-      selectedOption: setSelectedOption(formAuthorization.DESIGNER?.roles,"onlyYou"),
+      selectedRoles: convertSelectedValueToMultiSelectOption(formAuthorization.DESIGNER?.roles,
+         multiSelectOptionKey),
+      selectedOption: setSelectedOption("onlyYou", formAuthorization.DESIGNER?.roles),
     },
     FORM: {
       roleInput: "",
-      selectedRoles: formAuthorization.FORM?.roles,
-      selectedOption: setSelectedOption(formAuthorization.FORM?.roles,"registeredUsers"),
+      selectedRoles: convertSelectedValueToMultiSelectOption(formAuthorization.FORM?.roles, 
+        multiSelectOptionKey),
+      selectedOption: setSelectedOption("registeredUsers", formAuthorization.FORM?.roles),
     },
     APPLICATION: {
       roleInput: "",
-      selectedRoles: formAuthorization.APPLICATION?.roles,
-      selectedOption: setSelectedOption(formAuthorization.APPLICATION?.roles, "submitter"),
-    },
+      selectedRoles: convertSelectedValueToMultiSelectOption(formAuthorization.APPLICATION?.roles,
+         multiSelectOptionKey),
+      selectedOption: setSelectedOption("submitter", formAuthorization.APPLICATION?.roles), 
+      /* The 'submitter' key is stored in 'resourceDetails'. If the roles array is not empty
+       we assume that the submitter is true. */
+    }
+
   });
 
-    /* ------------------------- validating form name and path ------------------------ */
+  /* --------Updating path if multitenant enabled-------------------------- */
+  useEffect(()=>{
+    if(MULTITENANCY_ENABLED){
+      const updatedDisplayPath = HelperServices.removeTenantKeyFromData(formDetails.path,tenantKey);
+      setFormDetails((prev) => {
+        return {
+          ...prev,
+          path: updatedDisplayPath
+        };
+      });
+      const updatedUrlPath = addTenantkeyAsSuffix(publicUrlPath,tenantKey);
+      setUrlPath(updatedUrlPath);
+    }
+  },[MULTITENANCY_ENABLED]);
+
+  /* ------------------------- validating form name and path ------------------------ */
 
   const validateField = async (field, value) => {
-    let errorMessage = "";
     if (!value.trim()) {
-      errorMessage = `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
-    } else {
-      try {
-        const response = field === 'name' ? await validateFormName(value) : await validatePathName(value);
-        const data = response?.data;
-        if (data && data.code === "FORM_EXISTS") {
-          errorMessage = data.message;
-        }
-      } catch (error) {
-        errorMessage = error.response?.data?.message || 
-        `An error occurred while validating the ${field}.`;
-        console.error(`Error validating ${field}:`, errorMessage);
-      }
+      const errorMessage = `${field.charAt(0).toUpperCase() + field.slice(1)} is required.`;
+      setErrors((prev) => ({ ...prev, [field]: errorMessage }));
+      return false;
     }
+  
+    setIsValidating((prev) => ({ ...prev, [field]: true }));
+    let errorMessage = "";
+  
+    try {
+      const response =
+        field === "title"
+          ? await validateFormName(value, parentFormId)
+          : await validatePathName(value, formId);
+  
+      const data = response?.data;
+      if (data?.code === "FORM_EXISTS") {
+        errorMessage = data.message;
+      }
+    } catch (error) {
+      errorMessage =
+        error.response?.data?.message ||
+        `An error occurred while validating the ${field}.`;
+      console.error(`Error validating ${field}:`, errorMessage);
+    }
+  
     setErrors((prev) => ({ ...prev, [field]: errorMessage }));
+    setIsValidating((prev) => ({ ...prev, [field]: false }));
+      return !errorMessage; // Return true if no error
   };
 
 
@@ -110,18 +148,21 @@ const FormSettings = forwardRef((props, ref) => {
 
   const handleFormDetailsChange = (e) => {
     const { name, value, type } = e.target;
-    // if form name or path changed need to call validation api based on that
-    let updatedValue =
-      name === "path" ? _camelCase(value).toLowerCase() : value;
-    
+    let field = name === "title" ? "name" : name;  // Use 'name' for title case
+    // Clear errors and reset blurStatus for the relevant field
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+    blurStatus.current[name] = false;  
+    let updatedValue = name === "path" ? _camelCase(value).toLowerCase() : value;
+  
     if (type === "checkbox") {
       setFormDetails((prev) => ({ ...prev, [name]: e.target.checked ? "wizard" : "form" }));
     } else {
       setFormDetails((prev) => ({ ...prev, [name]: updatedValue }));
-      if (name === "title" || name === "path") {
-        validateField(name === "title" ? 'name' : 'path', updatedValue);
-      }
     }
+  };
+  
+  const handleBlur = (field, value) => {
+        validateField(field, value);
   };
   
 
@@ -131,37 +172,15 @@ const FormSettings = forwardRef((props, ref) => {
       .then((res) => {
         if (res) {
           const { data = [] } = res;
-          setUserRoles(data.map((role) => role.name));
+          setUserRoles(data.map((role,index) => ({[multiSelectOptionKey]:role.name, id: index})));
         }
       })
       .catch((error) => console.error("error", error));
   }, [dispatch]);
 
 
-  const updateAccessRoles = useCallback((accessList, type, roleId) => {
-    return accessList.map((access) => {
-      if (access.type === type) {
-        const roles = isAnonymous
-          ? [...new Set([...access.roles, roleId])]
-          : access.roles.filter((id) => id !== roleId);
-        return { ...access, roles };
-      }
-      return access;
-    });
-  },[isAnonymous]);
 
-
-  //  chaning the form access
-  useEffect(() => {
-    setFormAccessCopy((prev) =>
-      updateAccessRoles(prev, "read_all", roleIds.ANONYMOUS)
-    );
-    setSubmissionAccessCopy((prev) =>
-      updateAccessRoles(prev, "create_own", roleIds.ANONYMOUS)
-    );
-  }, [isAnonymous, roleIds.ANONYMOUS]);
-
-  const handleRoleStateChange = (section, key, value) => {
+  const handleRoleStateChange = (section, key, value = []) => {
     setRolesState((prevState) => ({
       ...prevState,
       [section]: {
@@ -173,7 +192,7 @@ const FormSettings = forwardRef((props, ref) => {
 
   const copyPublicUrl = async () => {
     try {
-      await copyText(`${publicUrlPath}${formDetails.path}`);
+      await copyText(`${urlPath}${formDetails.path}`);
       setCopied(true);
       setTimeout(() => {
         setCopied(false);
@@ -186,13 +205,34 @@ const FormSettings = forwardRef((props, ref) => {
   useImperativeHandle(ref, () => {
     return {
       formDetails: { ...formDetails, anonymous: isAnonymous },
-      accessDetails: {
-        formAccess: formAccessCopy,
-        submissionAccess: submissionAccessCopy,
-      },
       rolesState: rolesState,
+      validateField,
     };
-  });
+  }); 
+  
+  useEffect(() => {
+    const isAnyRoleEmpty = Object.values(rolesState).some(
+      (section) =>
+        section.selectedOption === "specifiedRoles" &&
+        section.selectedRoles.length === 0
+    );
+  
+    const hasFormErrors =
+      errors.path !== "" ||
+      errors.name !== "" ||
+      formDetails.title === "" ||
+      formDetails.path === "";
+  
+    // checking both values for disabling the save changes button  
+    const shouldDisableSaveButton = isAnyRoleEmpty || hasFormErrors;
+
+    props.setIsSaveButtonDisabled(shouldDisableSaveButton);
+  }, [rolesState, errors, formDetails]);
+  
+  const handleRoleSelectForDesign = (roles) => handleRoleStateChange(DESIGN, "selectedRoles", roles);
+  const handleRoleSelectForForm = (roles) => handleRoleStateChange(FORM, "selectedRoles", roles);
+  const handleRoleSelectForApplication = (roles) => 
+    handleRoleStateChange(APPLICATION, "selectedRoles", roles);
 
   return (
     <>
@@ -200,6 +240,7 @@ const FormSettings = forwardRef((props, ref) => {
       <div className="section">
         <h5 className="fw-bold">{t("Basic")}</h5>
         <FormInput
+          required
           value={formDetails.title}
           label={t("Name")}
           onChange={handleFormDetailsChange}
@@ -208,7 +249,9 @@ const FormSettings = forwardRef((props, ref) => {
           ariaLabel={t("Form Name")}
           isInvalid = {!!errors.name}
           feedback = {errors.name}
-          onBlur={() => validateField('name', formDetails.title)}
+          turnOnLoader={isValidating.name}
+          onBlur={() => handleBlur('name', formDetails.title)}   
+          maxLength={200} 
           />
         <FormTextArea
           label={t("Description")}
@@ -241,7 +284,7 @@ const FormSettings = forwardRef((props, ref) => {
         <h5 className="fw-bold">{t("Permissions")}</h5>
 
         <Form.Label className="field-label">
-          {t("Who Can Edit This Form")}
+          {t("Who Can View/Edit This Form")}
         </Form.Label>
         <CustomRadioButton
           items={[
@@ -269,13 +312,15 @@ const FormSettings = forwardRef((props, ref) => {
           <FormInput disabled={true} />
         )}
         {rolesState.DESIGN.selectedOption === "specifiedRoles" && (
-          <MultiSelectComponent
-            allRoles={userRoles}
-            selectedRoles={rolesState.DESIGN.selectedRoles}
-            setSelectedRoles={(roles) =>
-              handleRoleStateChange(DESIGN, "selectedRoles", roles)
-            }
+          <MultipleSelect
+          options={userRoles}  
+          selectedValues={rolesState.DESIGN.selectedRoles} 
+          onSelect={handleRoleSelectForDesign}  
+          onRemove={handleRoleSelectForDesign}  
+          displayValue={multiSelectOptionKey}
+          avoidHighlightFirstOption={true}
           />
+ 
         )}
 
         <Form.Label className="field-label mt-3">
@@ -317,13 +362,15 @@ const FormSettings = forwardRef((props, ref) => {
           <FormInput disabled={true} />
         )}
         {rolesState.FORM.selectedOption === "specifiedRoles" && (
-          <MultiSelectComponent
-            allRoles={userRoles}
-            selectedRoles={rolesState.FORM.selectedRoles}
-            setSelectedRoles={(roles) =>
-              handleRoleStateChange(FORM, "selectedRoles", roles)
-            }
-          />
+            <MultipleSelect 
+            options={userRoles} // Options to display in the dropdown
+            selectedValues={rolesState.FORM.selectedRoles} // Preselected value to persist in dropdown
+            onSelect={handleRoleSelectForForm} // Function will trigger on select event
+            onRemove={handleRoleSelectForForm} // Function will trigger on remove event
+            displayValue={multiSelectOptionKey} // Property name to display in the dropdown options
+            avoidHighlightFirstOption={true}
+            />
+           
         )}
 
         <Form.Label className="field-label mt-3">
@@ -356,13 +403,15 @@ const FormSettings = forwardRef((props, ref) => {
         )}
 
         {rolesState.APPLICATION.selectedOption === "specifiedRoles" && (
-          <MultiSelectComponent
-            allRoles={userRoles}
-            selectedRoles={rolesState.APPLICATION.selectedRoles}
-            setSelectedRoles={(roles) =>
-              handleRoleStateChange(APPLICATION, "selectedRoles", roles)
-            }
+          <MultipleSelect 
+            options={userRoles} // Options to display in the dropdown
+            selectedValues={rolesState.APPLICATION.selectedRoles} // Preselected value to persist in dropdown
+            onSelect={handleRoleSelectForApplication} // Function will trigger on select event
+            onRemove={handleRoleSelectForApplication} // Function will trigger on remove event
+            displayValue={multiSelectOptionKey} // Property name to display in the dropdown options
+            avoidHighlightFirstOption={true}
           />
+ 
         )}
       </div>
 
@@ -372,10 +421,10 @@ const FormSettings = forwardRef((props, ref) => {
         <CustomInfo heading="Note" 
         content="Making changes to your form URL will make your form inaccessible from your current URL." />
         <Form.Group className="settings-input w-100" controlId="url-input">
-          <Form.Label className="field-label">{t("URL Path")}</Form.Label>
+          <Form.Label className="field-label">{t("URL")} <span className='required-icon'>*</span></Form.Label>
           <InputGroup className="url-input">
             <InputGroup.Text className="url-non-edit">
-              {publicUrlPath}
+              {urlPath}
             </InputGroup.Text>
 
             <FormControl
@@ -384,7 +433,7 @@ const FormSettings = forwardRef((props, ref) => {
               className="url-edit"
               name="path"
               onChange={handleFormDetailsChange}
-              onBlur={() => validateField('path', formDetails.path)}            />
+              onBlur={() => handleBlur('path', formDetails.path)}           />
             <InputGroup.Text className="url-copy" onClick={copyPublicUrl}>
               {copied ? <i className="fa fa-check" /> : <CopyIcon />}
             </InputGroup.Text>
@@ -396,5 +445,9 @@ const FormSettings = forwardRef((props, ref) => {
     </>
   );
 });
+
+FormSettings.propTypes = {
+  setIsSaveButtonDisabled: PropTypes.func.isRequired,
+};
 
 export default FormSettings;
