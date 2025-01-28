@@ -10,7 +10,7 @@ from jose import jwt as json_web_token
 from jose.exceptions import JWTError
 
 from ..exceptions import BusinessException, ExternalError
-from .logging import CustomFormatter
+from .format import CustomFormatter
 
 jwt = JwtManager()  # pylint: disable=invalid-name
 
@@ -27,6 +27,7 @@ class Auth:
         def decorated(*args, **kwargs):
             g.authorization_header = request.headers.get("Authorization", None)
             g.token_info = g.jwt_oidc_token_info
+            CustomFormatter.tenant=g.jwt_oidc_token_info.get("tenantKey","default")
 
             return f(*args, **kwargs)
 
