@@ -10,6 +10,7 @@ from jose import jwt as json_web_token
 from jose.exceptions import JWTError
 
 from ..exceptions import BusinessException, ExternalError
+from .logging import CustomFormatter
 
 jwt = JwtManager()  # pylint: disable=invalid-name
 
