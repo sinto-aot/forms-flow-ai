@@ -30,5 +30,5 @@ class CustomFormatter(logging.Formatter):
         """Returns the formatted information."""
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
-        record["tenant"] = CustomFormatter.tenant
+        record.tenant = CustomFormatter.tenant
         return formatter.format(record)
