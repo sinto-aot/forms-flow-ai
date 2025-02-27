@@ -10,9 +10,10 @@ from opentelemetry.exporter.zipkin.json import ZipkinExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
-
-def setup_tracing(service_name="forms-flow-api"):
+def setup_tracing(app, service_name):
     """Sets up OpenTelemetry tracing for the application."""
     # Check if OpenTelemetry tracing is enabled
     if os.getenv("ENABLE_OPENTELEMETRY", "false").lower() != "true":
@@ -42,3 +43,6 @@ def setup_tracing(service_name="forms-flow-api"):
         print("Zipkin endpoint not configured. Zipkin tracing will not be enabled.")
 
     print("OpenTelemetry tracing is enabled and configured.")
+
+    FlaskInstrumentor().instrument_app(app)
+    RequestsInstrumentor().instrument()
