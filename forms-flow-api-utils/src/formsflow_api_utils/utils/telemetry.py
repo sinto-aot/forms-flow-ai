@@ -9,8 +9,10 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
-def setup_tracing(service_name):
+def setup_tracing(app, service_name):
     """Sets up OpenTelemetry tracing for the application."""
     # Check if OpenTelemetry tracing is enabled
     if os.getenv("ENABLE_OPENTELEMETRY", "false").lower() != "true":
@@ -28,3 +30,6 @@ def setup_tracing(service_name):
     # Add the OTLP exporter to the tracer provider
     otlp_span_processor = BatchSpanProcessor(otlp_exporter)
     trace_provider.add_span_processor(otlp_span_processor)
+
+    FlaskInstrumentor().instrument_app(app)
+    RequestsInstrumentor().instrument()
